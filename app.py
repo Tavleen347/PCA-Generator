@@ -1,27 +1,23 @@
 import streamlit as st
 import pandas as pd
 import google.generativeai as genai
-import os
 
-# 1. Page Configuration
 st.set_page_config(page_title="CS Team PCA Generator", page_icon="📊", layout="wide")
 st.title("📊 Automated PCA AI Agent")
 st.write("Upload all Go-Live and Power BI Report files to generate the PCA narrative.")
 
-# 2. Configure the AI Brain using the Secret Key
-try:
-    genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-    model = genai.GenerativeModel('gemini-1.5-flash') # We use the fast, smart model
-except Exception as e:
-    st.warning("⚠️ AI not connected yet. Please add your GEMINI_API_KEY to the Streamlit Secrets.")
-
-# 3. Sidebar for Settings
+# --- NEW: Sidebar Settings & API Key Input ---
 with st.sidebar:
+    st.header("⚙️ App Settings")
+    # This text box lets you paste the key directly into the app for testing
+    api_key_input = st.text_input("Paste Gemini API Key here:", type="password")
+    
+    st.markdown("---")
     st.header("Campaign Settings")
     brand_theme = st.selectbox("Brand Theme:", ("McDonald's", "Petronas", "Nike", "Adidas"))
     platform = st.selectbox("Platform:", ("YouTube Mirrors", "TikTok", "Meta", "CTV"))
 
-# 4. Bulk File Uploader
+# --- File Uploader ---
 uploaded_files = st.file_uploader(
     "Drag & Drop ALL Campaign Files here (Go-Live & Reports)", 
     type=["csv", "xlsx"], 
@@ -30,15 +26,19 @@ uploaded_files = st.file_uploader(
 
 st.markdown("---")
 
-# 5. The "Generate Insights" Engine
+# --- The "Generate Insights" Engine ---
 if st.button("🧠 Analyze Data & Generate PCA Insights", type="primary"):
-    if uploaded_files:
-        if "GEMINI_API_KEY" not in st.secrets:
-            st.error("Please add your Gemini API Key in the settings first!")
-        else:
+    if not api_key_input:
+        st.error("⚠️ Please paste your API key into the sidebar first!")
+    elif not uploaded_files:
+        st.warning("⚠️ Please upload the campaign files first.")
+    else:
+        try:
+            # Configure the AI using the key from the sidebar text box
+            genai.configure(api_key=api_key_input)
+            model = genai.GenerativeModel('gemini-1.5-flash')
+            
             with st.spinner("The AI is reading your files and drafting the PCA..."):
-                
-                # A. Read all the uploaded files into one massive text summary for the AI
                 all_data_text = ""
                 for file in uploaded_files:
                     if file.name.endswith('.csv'):
@@ -47,11 +47,8 @@ if st.button("🧠 Analyze Data & Generate PCA Insights", type="primary"):
                         df = pd.read_excel(file)
                     
                     all_data_text += f"\n\n--- FILE: {file.name} ---\n"
-                    # We only send the top 10 rows of each file to the AI to save memory, 
-                    # which is usually enough to understand the totals and top performers.
                     all_data_text += df.head(10).to_string() 
 
-                # B. The "Prompt" - Instructions for the AI
                 prompt = f"""
                 You are an expert Media Analyst for an ad tech company. 
                 You are writing a Post Campaign Analysis (PCA) presentation for a {brand_theme} campaign running on {platform}.
@@ -71,15 +68,10 @@ if st.button("🧠 Analyze Data & Generate PCA Insights", type="primary"):
                 Keep the tone professional, analytical, and ready to be pasted into a presentation deck. Do not make up numbers.
                 """
                 
-                # C. Send to AI and get response
-                try:
-                    response = model.generate_content(prompt)
-                    
-                    # D. Display the Results!
-                    st.success("PCA Narrative Generated Successfully!")
-                    st.write(response.text)
-                    
-                except Exception as e:
-                    st.error(f"Error generating insights: {e}")
-    else:
-        st.warning("Please upload the campaign files first.")
+                response = model.generate_content(prompt)
+                
+                st.success("PCA Narrative Generated Successfully!")
+                st.write(response.text)
+                
+        except Exception as e:
+            st.error(f"Error generating insights: {e}")
